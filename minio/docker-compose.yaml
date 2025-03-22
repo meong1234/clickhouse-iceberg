@@ -1,0 +1,51 @@
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    environment:
+      - MINIO_ROOT_USER=minio-root-user
+      - MINIO_ROOT_PASSWORD=minio-root-password
+      - MINIO_DOMAIN=minio
+    volumes:
+      - ../data/minio:/data
+    networks:
+      iceberg_net:
+        aliases:
+          - warehouse.minio        
+    ports:
+        - 9001:9001
+        - 9002:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    networks:
+      iceberg_net:
+    environment:
+      - AWS_ACCESS_KEY_ID=minio-root-user
+      - AWS_SECRET_ACCESS_KEY=minio-root-password
+      - AWS_REGION=us-east-1
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc config host add minio http://minio:9000 minio-root-user minio-root-password) do echo '...waiting...' && sleep 1; done;
+      
+      # Check if warehouse bucket exists
+      if ! /usr/bin/mc ls minio/warehouse > /dev/null 2>&1; then
+        echo 'Creating warehouse bucket...'
+        /usr/bin/mc mb minio/warehouse --ignore-existing;
+      else
+        echo 'Warehouse bucket already exists, preserving data'
+      fi
+      
+      # Always ensure the policy is set correctly
+      /usr/bin/mc policy set public minio/warehouse;
+      
+      tail -f /dev/null
+      "
+
+networks:
+  iceberg_net:
+    name: iceberg_network
+    external: true

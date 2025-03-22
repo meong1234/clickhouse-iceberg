@@ -1,0 +1,27 @@
+<clickhouse>
+  <!-- Docs: <https://clickhouse.com/docs/en/operations/settings/settings_users/> -->
+  <users>
+    <default>
+      <!-- Allow connections from anywhere -->
+      <networks>
+        <ip>::/0</ip>
+        <ip>0.0.0.0/0</ip>
+        <ip>127.0.0.1</ip>
+        <ip>::1</ip>
+        <host>localhost</host>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <!-- Adding explicit password authentication -->
+      <password></password>
+      <access_management>1</access_management>
+    </default>
+  </users>
+  
+  <!-- Add profiles section for user-level settings -->
+  <profiles>
+    <default>
+      <allow_experimental_database_iceberg>1</allow_experimental_database_iceberg>
+    </default>
+  </profiles>
+</clickhouse>
