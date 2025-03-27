@@ -173,6 +173,7 @@ DESCRIBE TABLE iceberg_catalog.`iot_battery.battery_v2`;
 SHOW CREATE TABLE iceberg_catalog.`iot_battery.battery_v2`;
 ```
 
+
 ## Project Structure
 
 ### Directory Structure
@@ -218,16 +219,13 @@ The ClickHouse server is configured with:
 #### 2. Iceberg REST Catalog
 
 The Iceberg REST Catalog provides:
-- Based on [tabulario/iceberg-rest](https://github.com/tabulario/iceberg-rest)
+- Based on Uses the tabulario/iceberg-rest Docker image
+- **Note:** The source for this image is now maintained at [databricks/iceberg-rest-image](https://github.com/databricks/iceberg-rest-image)
 - HTTP API on port 8181
 - Manages Iceberg table metadata
 - Connects to MinIO for storage
 - Configured to use the 'warehouse' bucket
 
-**REST Endpoints:**
-- `GET /v1/namespaces`: List available namespaces
-- `GET /v1/namespaces/{namespace}/tables`: List tables in a namespace
-- `GET /v1/namespaces/{namespace}/tables/{table}`: Get table metadata
 
 #### 3. MinIO Object Storage
 
@@ -256,7 +254,7 @@ make clickhouse-logs
 ### Common Issues
 
 1. **Services not starting properly**
-   - Check Docker logs: `docker logs clickhouse-server`
+   - Check Docker process: `docker ps -a`
    - Ensure no port conflicts with existing services
    - Check network connectivity between containers: `docker network inspect iceberg_network`
 
