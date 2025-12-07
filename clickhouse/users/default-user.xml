@@ -22,6 +22,7 @@
   <profiles>
     <default>
       <allow_experimental_database_iceberg>1</allow_experimental_database_iceberg>
+      <allow_experimental_insert_into_iceberg>1</allow_experimental_insert_into_iceberg>
     </default>
   </profiles>
 </clickhouse>

@@ -1,0 +1,113 @@
+# ============================================================================
+# ClickHouse + Iceberg + MinIO - Unified Docker Compose
+# ============================================================================
+# This compose file sets up a complete data lakehouse environment:
+# - MinIO: S3-compatible object storage
+# - ClickHouse: OLAP database with Iceberg integration (IcebergS3 engine)
+# ============================================================================
+
+x-minio-credentials: &minio-credentials
+  AWS_ACCESS_KEY_ID: minio-root-user
+  AWS_SECRET_ACCESS_KEY: minio-root-password
+  AWS_REGION: us-east-1
+
+services:
+  # ==========================================================================
+  # Object Storage Layer
+  # ==========================================================================
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    hostname: minio
+    environment:
+      MINIO_ROOT_USER: minio-root-user
+      MINIO_ROOT_PASSWORD: minio-root-password
+      MINIO_DOMAIN: minio
+    volumes:
+      - ./data/minio:/data
+    networks:
+      iceberg_net:
+        aliases:
+          - warehouse.minio
+    ports:
+      - "9001:9001"   # MinIO Console
+      - "9002:9000"   # MinIO API
+    command: ["server", "/data", "--console-address", ":9001"]
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # MinIO Client - Initializes buckets and policies
+  mc:
+    image: minio/mc:latest
+    container_name: mc
+    hostname: mc
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - iceberg_net
+    environment:
+      <<: *minio-credentials
+    entrypoint: |
+      /bin/sh -c '
+      echo "Configuring MinIO client..."
+      until mc alias set minio http://minio:9000 minio-root-user minio-root-password; do
+        echo "Waiting for MinIO..."
+        sleep 2
+      done
+      echo "Checking warehouse bucket..."
+      if ! mc ls minio/warehouse > /dev/null 2>&1; then
+        echo "Creating warehouse bucket..."
+        mc mb minio/warehouse --ignore-existing
+      else
+        echo "Warehouse bucket already exists"
+      fi
+      echo "Setting bucket policy..."
+      mc anonymous set public minio/warehouse
+      echo "MinIO initialization complete!"
+      tail -f /dev/null
+      '
+    restart: on-failure
+
+  # ==========================================================================
+  # ClickHouse OLAP Database
+  # ==========================================================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-server
+    hostname: clickhouse-server
+    depends_on:
+      mc:
+        condition: service_started
+    ports:
+      - "127.0.0.1:8123:8123"   # HTTP interface
+      - "127.0.0.1:9000:9000"   # Native interface
+    volumes:
+      - ./clickhouse/config:/etc/clickhouse-server/config.d
+      - ./clickhouse/users:/etc/clickhouse-server/users.d
+      - ./data/clickhouse:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ""
+    networks:
+      - iceberg_net
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  iceberg_net:
+    name: iceberg_network
+    external: true

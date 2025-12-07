@@ -1,93 +1,61 @@
-# Main Makefile to control all services
+# ============================================================================
+# ClickHouse + Iceberg + MinIO - Makefile
+# ============================================================================
 
-# List all service directories
-SERVICES := minio iceberg clickhouse
+.PHONY: help up down restart logs ps clean network cli
 
-.PHONY: help start stop restart logs clean $(SERVICES) all-logs init-network
-
-# Default target shows help
+# Default target
 help:
-	@echo "Main Control Makefile for All Services"
+	@echo "ClickHouse + Iceberg + MinIO Stack"
 	@echo ""
-	@echo "Available commands:"
-	@echo "  make start         - Start all services"
-	@echo "  make stop          - Stop all services"
-	@echo "  make restart       - Restart all services"
-	@echo "  make logs          - View logs from all services"
-	@echo "  make clean         - Clean up all services"
-	@echo "  make init-network  - Initialize the shared Docker network"
+	@echo "Usage:"
+	@echo "  make up      - Start all services"
+	@echo "  make down    - Stop all services"
+	@echo "  make restart - Restart all services"
+	@echo "  make logs    - View logs (follow mode)"
+	@echo "  make ps      - Show running services"
+	@echo "  make clean   - Stop and remove all data"
+	@echo "  make cli     - Connect to ClickHouse client"
 	@echo ""
-	@echo "Service-specific commands:"
-	@echo "  make iceberg       - Show iceberg service help"
-	@echo "  make minio         - Show minio service help"
-	@echo "  make clickhouse    - Show clickhouse service help"
-	@echo ""
-	@echo "  make iceberg-start - Start only iceberg service"
-	@echo "  make minio-start      - Start only minio service"
-	@echo "  make clickhouse-start - Start only clickhouse service"
-	@echo "  (etc. for other actions: stop, restart, logs, clean)"
 
-# Initialize the shared network
-init-network:
-	@echo "Initializing shared network..."
+# Create network if it doesn't exist
+network:
 	@docker network inspect iceberg_network >/dev/null 2>&1 || docker network create iceberg_network
-	@echo "Shared network 'iceberg_network' is ready"
 
 # Start all services
-start: init-network
-	@echo "Starting all services..."
-	@for service in $(SERVICES); do \
-		echo "Starting $$service..."; \
-		$(MAKE) -C $$service start; \
-	done
-	@echo "All services started."
+up: network
+	@docker compose up -d
+	@echo ""
+	@echo "Services started! Access points:"
+	@echo "  - MinIO Console:    http://localhost:9001"
+	@echo "  - MinIO API:        http://localhost:9002"
+	@echo "  - Iceberg Catalog:  http://localhost:8181"
+	@echo "  - ClickHouse HTTP:  http://localhost:8123"
+	@echo "  - ClickHouse Native: localhost:9000"
 
 # Stop all services
-stop:
-	@echo "Stopping all services..."
-	@for service in $(SERVICES); do \
-		echo "Stopping $$service..."; \
-		$(MAKE) -C $$service stop; \
-	done
-	@echo "All services stopped."
+down:
+	@docker compose down
 
 # Restart all services
-restart: stop start
+restart: down up
 
-# Clean everything
+# View logs
+logs:
+	@docker compose logs -f
+
+# Show running services
+ps:
+	@docker compose ps
+
+# Connect to ClickHouse client
+cli:
+	@docker exec -it clickhouse-server clickhouse-client
+
+# Stop and remove all data (use with caution)
 clean:
-	@echo "Cleaning all services..."
-	@for service in $(SERVICES); do \
-		echo "Cleaning $$service..."; \
-		$(MAKE) -C $$service clean; \
-	done
-	@echo "All services cleaned."
-
-# Show all logs
-all-logs:
-	@echo "Viewing logs from all services is not recommended."
-	@echo "Use make SERVICE-logs to view logs for a specific service."
-
-# Service-specific targets
-$(SERVICES):
-	@$(MAKE) -C $@ help
-
-# Generate service-specific action targets
-define SERVICE_template
-$(1)-start: init-network
-	@$(MAKE) -C $(1) start
-
-$(1)-stop:
-	@$(MAKE) -C $(1) stop
-
-$(1)-restart: init-network
-	@$(MAKE) -C $(1) restart
-
-$(1)-logs:
-	@$(MAKE) -C $(1) logs
-
-$(1)-clean:
-	@$(MAKE) -C $(1) clean
-endef
-
-$(foreach service,$(SERVICES),$(eval $(call SERVICE_template,$(service))))
+	@echo "WARNING: This will remove all containers and data!"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@docker compose down -v
+	@rm -rf ./data/minio/* ./data/clickhouse/*
+	@echo "All data cleaned."
